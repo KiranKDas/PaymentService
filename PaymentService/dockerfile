@@ -1,0 +1,24 @@
+# Stage 1: Build the application
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+# Copy the project file and restore dependencies to cache this layer
+COPY ["PaymentService.csproj", "./"]
+RUN dotnet restore
+
+# Copy the rest of the source code and publish the application
+COPY . .
+RUN dotnet publish "PaymentService.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# Stage 2: Create the final runtime image
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+WORKDIR /app
+COPY --from=build /app/publish .
+
+# Expose the default .NET container port
+EXPOSE 8080
+
+# Switch to the built-in non-root user for better security
+USER $APP_UID
+
+ENTRYPOINT ["dotnet", "PaymentService.dll"]

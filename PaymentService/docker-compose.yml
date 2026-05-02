@@ -1,0 +1,51 @@
+services:
+  payment-db:
+    # This database is isolated to the Payment Service
+    image: postgres:16-alpine
+    container_name: payment_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: your_password
+      POSTGRES_DB: PaymentDb
+    ports:
+      - "5433:5432"
+    volumes:
+      - payment_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d PaymentDb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: dockerfile
+    container_name: payment_service
+    depends_on:
+      payment-db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=payment-db;Port=5432;Database=PaymentDb;Username=postgres;Password=your_password;"
+      # This overrides appsettings.json to use Docker's internal networking.
+      # It communicates with the billing service via its container name.
+      BillingServiceBaseUrl: "http://billingservice-billing-service-1:8080"
+      ASPNETCORE_ENVIRONMENT: Development
+    networks:
+      - default
+      - hms-network
+
+volumes:
+  payment_db_data:
+
+networks:
+  default: # This is the default internal network for this compose file.
+  hms-network: # This is the shared network for all microservices.
+    # This connects to the network your BillingService is already on.
+    # You can find the exact name by running 'docker network ls'. It's often '<project_folder>_default'.
+    name: billingservice_default
+    external: true
