@@ -42,19 +42,16 @@ try
 
     var app = builder.Build();
 
-    // 5. Configure the HTTP request pipeline
-    if (app.Environment.IsDevelopment())
+
+    app.MapOpenApi();
+    
+    app.MapScalarApiReference(options =>
     {
-        app.MapOpenApi();
-        
-        // Map Scalar UI to interact with the OpenAPI spec
-        app.MapScalarApiReference(options =>
-        {
-            options.WithTitle("Hospital Payment Service API")
-                   .WithTheme(ScalarTheme.DeepSpace)
-                   .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
-        });
-    }
+        options.WithTitle("Hospital Payment Service API")
+               .WithTheme(ScalarTheme.DeepSpace)
+               .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
+
 
     app.UseSerilogRequestLogging();
 
