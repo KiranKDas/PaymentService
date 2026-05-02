@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PaymentService.DAL;
 using PaymentService.Services;
 using Scalar.AspNetCore;
+using OpenTelemetry.Metrics;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -22,6 +23,17 @@ try
 
     builder.Services.AddHttpClient();
     builder.Services.AddScoped<IPaymentProcessor, PaymentProcessorService>();
+
+    // Configure Observability Metrics
+    builder.Services.AddOpenTelemetry()
+        .WithMetrics(metrics =>
+        {
+            metrics.AddMeter("Hospital.PaymentService");
+            metrics.AddAspNetCoreInstrumentation();
+            metrics.AddHttpClientInstrumentation();
+            metrics.AddPrometheusExporter();
+        });
+    builder.Services.AddHealthChecks();
 
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
@@ -65,6 +77,8 @@ try
     }
 
     app.UseAuthorization();
+    app.MapHealthChecks("/health");
+    app.MapPrometheusScrapingEndpoint();
     app.MapControllers();
 
     app.Run();

@@ -3,6 +3,7 @@ using PaymentService.DTOs;
 using PaymentService.Models;
 using PaymentService.DAL;
 using System.Diagnostics.Metrics;
+using System.Net.Http.Json;
 
 namespace PaymentService.Services;
 
@@ -18,6 +19,8 @@ public class PaymentProcessorService : IPaymentProcessor
     private readonly PaymentDbContext _dbContext;
     private readonly ILogger<PaymentProcessorService> _logger;
     private readonly Counter<int> _failedPaymentsCounter;
+    private readonly Histogram<double> _paymentProcessingLatency;
+    private readonly Histogram<double> _billingCallLatency;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
 
@@ -35,10 +38,14 @@ public class PaymentProcessorService : IPaymentProcessor
         
         var meter = meterFactory.Create("Hospital.PaymentService");
         _failedPaymentsCounter = meter.CreateCounter<int>("payments_failed_total");
+        _paymentProcessingLatency = meter.CreateHistogram<double>("payment_processing_latency_ms", unit: "ms");
+        _billingCallLatency = meter.CreateHistogram<double>("external_billing_call_latency_ms", unit: "ms");
     }
 
     public async Task<Payment> ProcessPaymentAsync(PaymentRequest request, string idempotencyKey, CancellationToken cancellationToken)
     {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
         // 1. Idempotency Check
         var existingPayment = await _dbContext.Payments
             .FirstOrDefaultAsync(p => p.IdempotencyKey == idempotencyKey, cancellationToken);
@@ -56,7 +63,9 @@ public class PaymentProcessorService : IPaymentProcessor
         var getBillReq = new HttpRequestMessage(HttpMethod.Get, $"{billingUrl}/v1/bills/{request.BillId}");
         getBillReq.Headers.TryAddWithoutValidation("userType", "billing");
         
+        var billCallStopwatch = System.Diagnostics.Stopwatch.StartNew();
         var getBillRes = await client.SendAsync(getBillReq, cancellationToken);
+        _billingCallLatency.Record(billCallStopwatch.ElapsedMilliseconds);
         if (!getBillRes.IsSuccessStatusCode)
         {
             throw new InvalidOperationException($"Could not fetch Bill ID {request.BillId}. Ensure bill exists.");
@@ -110,6 +119,8 @@ public class PaymentProcessorService : IPaymentProcessor
             _logger.LogWarning("Failed to automatically update Bill ID {BillId} to PAID status in BillingService.", request.BillId);
         }
         
+        _paymentProcessingLatency.Record(stopwatch.ElapsedMilliseconds);
+
         return payment;
     }
 

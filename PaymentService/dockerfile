@@ -15,10 +15,6 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /app/publish .
 
-# Expose the default .NET container port
 EXPOSE 8080
-
-# Switch to the built-in non-root user for better security
 USER $APP_UID
-
 ENTRYPOINT ["dotnet", "PaymentService.dll"]

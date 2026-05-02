@@ -22,7 +22,7 @@ services:
   payment-service:
     build:
       context: .
-      dockerfile: dockerfile
+      dockerfile: Dockerfile
     container_name: payment_service
     depends_on:
       payment-db:
